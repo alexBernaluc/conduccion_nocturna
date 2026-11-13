@@ -1,15 +1,15 @@
 /*
  * Informática 3 — Conducción Nocturna
- * Versión 1: escenario fijo y luces con valores constantes.
+ * Versión 2 en desarrollo: conducción simple y cámara seguidora.
  *
  * IMPORTANTE: no usamos import/export ni fetch. Este archivo puede abrirse
  * con index.html mediante doble clic (file://) cuando THREE está disponible.
  *
  * Flujo de ejecución:
- *   verificarBiblioteca() -> inicializarRenderer() -> crearEscena() ->
+ *   comprobación de THREE -> iniciar() -> inicializarRenderer() -> crearEscena() ->
  *   crearTerreno() -> crearCalles() -> crearManzanas() ->
  *   crearAlumbrado() -> crearVehiculo() -> crearFaros() ->
- *   configurarCamara() -> animar().
+ *   configurarCamara() -> configurarControles() -> animar(tiempoActual).
  */
 (function () {
   'use strict';
@@ -41,6 +41,17 @@
   let auto;
   const faros = [];
   const lamparas = [];
+
+  // Unidades de escena por segundo y radianes por segundo.
+  const CONDUCCION = { velocidad: 12, velocidadGiro: 1.6, limiteX: 51, limiteZ: 40 };
+  const CAMARA = { altura: 8.8, distancia: 14, suavidad: 8 };
+  const teclas = new Set();
+  const teclasConduccion = new Set(['KeyW', 'KeyS', 'KeyA', 'KeyD',
+    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+  let tiempoAnterior = null;
+  const direccionFrontal = new THREE.Vector3();
+  const posicionCamaraDeseada = new THREE.Vector3();
+  const objetivoCamara = new THREE.Vector3();
 
   // 1) Configuración del renderizador WebGL y de las sombras.
   function inicializarRenderer() {
@@ -268,17 +279,70 @@
   // 9) Cámara en tercera persona, atrás y un poco arriba del auto.
   function configurarCamara() {
     camara = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 200);
-    const detras = auto.localToWorld(new THREE.Vector3(6.1, 8.8, 14.0));
-    const frente = auto.localToWorld(new THREE.Vector3(0, 1.0, -5.0));
-    camara.position.copy(detras);
-    camara.lookAt(frente);
+    actualizarCamara(0, true);
   }
 
-  // 10) Bucle de dibujo. Por ahora el escenario no se mueve.
-  // En la versión 2 pondremos aquí la actualización de posición/cámara.
-  function animar() {
-    requestAnimationFrame(animar);
+  function actualizarCamara(deltaTime, inmediata) {
+    // position/rotation cambiaron: actualizar antes de convertir a coordenadas mundiales.
+    auto.updateMatrixWorld(true);
+    posicionCamaraDeseada.set(0, CAMARA.altura, CAMARA.distancia);
+    auto.localToWorld(posicionCamaraDeseada);
+    // Mirar cerca del centro mantiene el auto encuadrado aun durante un giro.
+    objetivoCamara.set(0, 1, 0);
+    auto.localToWorld(objetivoCamara);
+    const factor = 1 - Math.exp(-CAMARA.suavidad * deltaTime);
+    if (inmediata) camara.position.copy(posicionCamaraDeseada);
+    else camara.position.lerp(posicionCamaraDeseada, factor);
+    camara.lookAt(objetivoCamara);
+  }
+
+  function alPresionarTecla(evento) {
+    if (!teclasConduccion.has(evento.code)) return;
+    evento.preventDefault();
+    teclas.add(evento.code); // Repeticiones de keydown no duplican una tecla.
+  }
+
+  function alSoltarTecla(evento) {
+    if (!teclasConduccion.has(evento.code)) return;
+    evento.preventDefault();
+    teclas.delete(evento.code);
+  }
+
+  function reiniciarEntrada() {
+    teclas.clear();
+    tiempoAnterior = null; // No acumular el tiempo pasado fuera de la ventana.
+  }
+
+  function configurarControles() {
+    window.addEventListener('keydown', alPresionarTecla);
+    window.addEventListener('keyup', alSoltarTecla);
+    window.addEventListener('blur', reiniciarEntrada);
+    document.addEventListener('visibilitychange', reiniciarEntrada);
+  }
+
+  function actualizarMovimiento(deltaTime) {
+    const avance = Number(teclas.has('KeyW') || teclas.has('ArrowUp')) -
+      Number(teclas.has('KeyS') || teclas.has('ArrowDown'));
+    const giro = Number(teclas.has('KeyA') || teclas.has('ArrowLeft')) -
+      Number(teclas.has('KeyD') || teclas.has('ArrowRight'));
+    // Sin traslación no giramos; en marcha atrás se invierte el giro de la carrocería.
+    auto.rotation.y += giro * avance * CONDUCCION.velocidadGiro * deltaTime;
+    const angulo = auto.rotation.y;
+    direccionFrontal.set(-Math.sin(angulo), 0, -Math.cos(angulo));
+    auto.position.addScaledVector(direccionFrontal, avance * CONDUCCION.velocidad * deltaTime);
+    // Margen para la carrocería: límite rectangular, no colisiones con objetos.
+    auto.position.x = THREE.MathUtils.clamp(auto.position.x, -CONDUCCION.limiteX, CONDUCCION.limiteX);
+    auto.position.z = THREE.MathUtils.clamp(auto.position.z, -CONDUCCION.limiteZ, CONDUCCION.limiteZ);
+  }
+
+  // 10) RAF entrega milisegundos. Limitamos pausas largas a 0.05 segundos simulados.
+  function animar(tiempoActual) {
+    const deltaTime = tiempoAnterior === null ? 0 : Math.min((tiempoActual - tiempoAnterior) / 1000, 0.05);
+    tiempoAnterior = tiempoActual;
+    actualizarMovimiento(deltaTime);
+    actualizarCamara(deltaTime, false);
     renderer.render(escena, camara);
+    requestAnimationFrame(animar);
   }
 
   function alCambiarTamano() {
@@ -300,8 +364,9 @@
       crearVehiculo();
       crearFaros();
       configurarCamara();
+      configurarControles();
       window.addEventListener('resize', alCambiarTamano);
-      animar();
+      requestAnimationFrame(animar);
     } catch (error) {
       console.error('Error al iniciar Conducción Nocturna:', error);
       mostrarError('Error al crear el escenario 3D. Abrí la consola del navegador (F12) para ver el detalle.');
