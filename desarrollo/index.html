@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Conducción Nocturna — Versión 2 en desarrollo</title>
+  <title>Conducción Nocturna — Versión 3 en desarrollo</title>
   <style>
     :root { color-scheme: dark; font-family: system-ui, Arial, sans-serif; }
     * { box-sizing: border-box; }
@@ -18,11 +18,23 @@
     #nota { position: fixed; bottom: 18px; left: 20px; background: rgba(9,16,30,.78);
       border: 1px solid rgba(190,206,241,.15); border-radius: 10px; padding: 10px 14px;
       font-size: 12px; color: #c7d4e5; max-width: min(450px, calc(100vw - 40px)); }
-    #error { position: fixed; inset: 0; display: none; place-items: center; padding: 28px;
+    #error { position: fixed; inset: 0; z-index: 10; display: none; place-items: center; padding: 28px;
       background: #10172a; color: #f5e6dc; font-size: 18px; text-align: center; }
     #error > div { max-width: 650px; line-height: 1.5; }
     @media (max-width: 600px) { #titulo { top: 10px; left: 10px; right: 10px; padding: 10px; }
       #nota { bottom: 9px; left: 10px; right: 10px; } }
+    #panel-luces { position: fixed; right: 16px; top: 16px; width: min(310px, calc(100vw - 32px));
+      max-height: calc(100vh - 32px); overflow-y: auto; background: #101a2bef; color: #edf2fb;
+      border: 1px solid #53647c; border-radius: 10px; padding: 12px; font-size: 13px; }
+    #panel-luces summary { cursor: pointer; font-size: 16px; font-weight: bold; }
+    #panel-luces p { line-height: 1.45; color: #c7d4e5; }
+    #deslizadores-luz > div { margin: 12px 0; }
+    #deslizadores-luz output { float: right; font-variant-numeric: tabular-nums; }
+    #deslizadores-luz input { display: block; width: 100%; margin: 6px 0; accent-color: #f0c878; }
+    #grupos-luz { display: grid; gap: 7px; margin: 12px 0; }
+    #panel-luces button { padding: 9px; color: #101a2b; background: #f0c878; border: 0; border-radius: 5px; cursor: pointer; }
+    #panel-luces :focus-visible { outline: 2px solid #f0c878; outline-offset: 3px; }
+    @media (max-width: 750px) { #panel-luces { top: 115px; max-height: calc(100vh - 260px); } }
   </style>
 </head>
 <body>
@@ -30,7 +42,7 @@
   <section id="titulo">
     <h1>Conducción Nocturna</h1>
     <p>Informática 3 · Three.js</p>
-    <p><strong>Versión 2 en desarrollo:</strong> conducción y cámara en tercera persona.</p>
+    <p><strong>Versión 3 en desarrollo:</strong> iluminación interactiva.</p>
   </section>
   <aside id="nota">
     W / ↑: avanzar · S / ↓: retroceder.<br>
@@ -38,6 +50,14 @@
     Combiná avance o retroceso con dirección para girar. Sin colisiones con edificios.
   </aside>
   <section id="error"><div id="mensaje-error"></div></section>
+  <details id="panel-luces" open>
+    <summary>Iluminación</summary>
+    <p>Conducí con WASD mientras ajustás las luces. Con foco en el panel, las flechas editan los controles. Hacé clic en la escena para conducir con flechas.</p>
+    <div id="deslizadores-luz"></div>
+    <fieldset id="grupos-luz"><legend>Grupos encendidos</legend></fieldset>
+    <button id="restablecer-luces" type="button">Restablecer iluminación</button>
+    <p>La emisión de ventanas cambia su brillo, pero no ilumina la calle. La apertura muestra el semiángulo del cono.</p>
+  </details>
 
   <!-- Primero busca la biblioteca dentro de la carpeta (uso sin Internet). -->
   <script src="./vendor/three.min.js"></script>

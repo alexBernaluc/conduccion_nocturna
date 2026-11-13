@@ -1,6 +1,6 @@
 /*
  * Informática 3 — Conducción Nocturna
- * Versión 2 en desarrollo: conducción simple y cámara seguidora.
+ * Versión 3 en desarrollo: iluminación interactiva y conducción.
  *
  * IMPORTANTE: no usamos import/export ni fetch. Este archivo puede abrirse
  * con index.html mediante doble clic (file://) cuando THREE está disponible.
@@ -9,7 +9,7 @@
  *   comprobación de THREE -> iniciar() -> inicializarRenderer() -> crearEscena() ->
  *   crearTerreno() -> crearCalles() -> crearManzanas() ->
  *   crearAlumbrado() -> crearVehiculo() -> crearFaros() ->
- *   configurarCamara() -> configurarControles() -> animar(tiempoActual).
+ *   configurarCamara() -> configurarControles() -> configurarPanelLuces() -> animar(tiempoActual).
  */
 (function () {
   'use strict';
@@ -24,7 +24,7 @@
     return;
   }
 
-  // Parámetros fijos: en las próximas versiones los convertiremos en controles.
+  // Construcción inicial; el panel modifica después las propiedades de los objetos.
   const AJUSTES = {
     anchoManzana: 18,
     separacionEntreManzanas: 8,
@@ -41,6 +41,27 @@
   let auto;
   const faros = [];
   const lamparas = [];
+  let luzAmbiente;
+  let luna;
+  const materialesVentanas = [];
+  const focosVisibles = [];
+  const farolesVisibles = [];
+  const controlesLuz = [
+    { clave: 'izquierdo', nombre: 'Faro izquierdo', valor: 85, min: 0, max: 200, paso: 1 },
+    { clave: 'derecho', nombre: 'Faro derecho', valor: 85, min: 0, max: 200, paso: 1 },
+    { clave: 'publico', nombre: 'Alumbrado público', valor: 23, min: 0, max: 60, paso: 1 },
+    { clave: 'ambiente', nombre: 'Luz ambiental', valor: 0.5, min: 0, max: 2, paso: 0.05 },
+    { clave: 'luna', nombre: 'Luna', valor: 0.37, min: 0, max: 2, paso: 0.01 },
+    { clave: 'ventanas', nombre: 'Emisión de ventanas', valor: 1, min: 0, max: 4, paso: 0.1 },
+    { clave: 'alcance', nombre: 'Alcance de faros (unidades)', valor: 34, min: 5, max: 60, paso: 1 },
+    { clave: 'apertura', nombre: 'Semiángulo de faros (°)', valor: 180 / 7, min: 10, max: 60, paso: 'any' }
+  ];
+  const gruposLuz = { faros: 'Faros', publico: 'Alumbrado público', ambiente: 'Ambiental', luna: 'Luna', ventanas: 'Ventanas' };
+  const valoresLuz = {};
+  const gruposEncendidos = {};
+  const entradasLuz = {};
+  const salidasLuz = {};
+  const interruptoresLuz = {};
 
   // Unidades de escena por segundo y radianes por segundo.
   const CONDUCCION = { velocidad: 12, velocidadGiro: 1.6, limiteX: 51, limiteZ: 40 };
@@ -65,6 +86,7 @@
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.35;
     contenedor.appendChild(renderer.domElement);
+    renderer.domElement.tabIndex = 0; // Clic o Tab devuelve el foco a la conducción.
   }
 
   // Utilidad común: crea una caja y opcionalmente permite que proyecte sombras.
@@ -84,12 +106,12 @@
     escena.background = new THREE.Color(AJUSTES.colorCielo);
     escena.fog = new THREE.Fog(AJUSTES.colorCielo, 55, 130);
 
-    const luzAmbiente = new THREE.HemisphereLight(0x9cb8e4, 0x344126, AJUSTES.intensidadAmbiente);
+    luzAmbiente = new THREE.HemisphereLight(0x9cb8e4, 0x344126, AJUSTES.intensidadAmbiente);
     escena.add(luzAmbiente);
 
     // La 'luna' da volumen a los edificios; el objetivo siguen siendo
     // los faros del auto y las luces de la calle.
-    const luna = new THREE.DirectionalLight(0x8ba5df, 0.37);
+    luna = new THREE.DirectionalLight(0x8ba5df, 0.37);
     luna.position.set(-24, 35, 14);
     escena.add(luna);
   }
@@ -133,8 +155,11 @@
     grupo.add(caja(ancho, alto, largo, color, 0, alto / 2, 0, true, true));
     grupo.add(caja(ancho + 0.35, 0.26, largo + 0.35, 0x1b2430, 0, alto + 0.12, 0, true, true));
 
-    const ventanaApagada = new THREE.MeshBasicMaterial({ color: 0x2a4055 });
-    const ventanaPrendida = new THREE.MeshBasicMaterial({ color: 0xf9d58d });
+    const ventanaApagada = new THREE.MeshStandardMaterial({ color: 0x2a4055 });
+    const ventanaPrendida = new THREE.MeshStandardMaterial({
+      color: 0x2a4055, emissive: 0xf9d58d, emissiveIntensity: 1
+    });
+    materialesVentanas.push(ventanaPrendida);
     const filas = Math.max(1, Math.floor((alto - 1) / 2.7));
 
     // Ventanas del frente, orientadas a la calle por el lado -Z.
@@ -191,6 +216,7 @@
     );
     foco.position.set(1.1, 5.95, 0);
     poste.add(foco);
+    focosVisibles.push(foco);
 
     const luz = new THREE.PointLight(0xffd6a1, AJUSTES.intensidadAlumbrado, 18, 2);
     luz.position.set(1.1, 5.85, 0);
@@ -245,11 +271,12 @@
     });
 
     // Faroles visuales (los dos SpotLight reales se crean en crearFaros).
-    const vidrioFaro = new THREE.MeshBasicMaterial({ color: 0xffe9ac });
     [-0.77, 0.77].forEach(function (x) {
+      const vidrioFaro = new THREE.MeshBasicMaterial({ color: 0xffe9ac });
       const farol = new THREE.Mesh(new THREE.BoxGeometry(0.51, 0.27, 0.045), vidrioFaro);
       farol.position.set(x, 0.97, -2.328);
       auto.add(farol);
+      farolesVisibles.push(farol);
       auto.add(caja(0.45, 0.22, 0.04, 0xd66a5b, x, 0.94, 2.33, false, false));
     });
 
@@ -296,16 +323,107 @@
     camara.lookAt(objetivoCamara);
   }
 
+  // Las flechas editan el panel; WASD permite conducir incluso con foco en él.
+  function flechaEnPanel(evento) {
+    return evento.code.startsWith('Arrow') && evento.target &&
+      Boolean(evento.target.closest('#panel-luces'));
+  }
+
   function alPresionarTecla(evento) {
     if (!teclasConduccion.has(evento.code)) return;
+    if (flechaEnPanel(evento)) return;
     evento.preventDefault();
     teclas.add(evento.code); // Repeticiones de keydown no duplican una tecla.
   }
 
   function alSoltarTecla(evento) {
     if (!teclasConduccion.has(evento.code)) return;
-    evento.preventDefault();
     teclas.delete(evento.code);
+    if (!flechaEnPanel(evento)) evento.preventDefault();
+  }
+
+  function aplicarIluminacion() {
+    // Orden de crearFaros: X negativo = izquierdo del conductor mirando hacia -Z.
+    faros.forEach(function (luz, i) {
+      luz.intensity = valoresLuz[i === 0 ? 'izquierdo' : 'derecho'];
+      luz.visible = gruposEncendidos.faros && luz.intensity > 0;
+      luz.distance = valoresLuz.alcance;
+      luz.angle = THREE.MathUtils.degToRad(valoresLuz.apertura);
+      luz.shadow.camera.far = luz.distance;
+      luz.shadow.camera.updateProjectionMatrix();
+      farolesVisibles[i].material.color.setHex(luz.visible ? 0xffe9ac : 0x26303a);
+    });
+    lamparas.forEach(function (luz, i) {
+      luz.intensity = valoresLuz.publico;
+      luz.visible = gruposEncendidos.publico && luz.intensity > 0;
+      focosVisibles[i].material.color.setHex(luz.visible ? 0xffd897 : 0x26303a);
+    });
+    luzAmbiente.intensity = valoresLuz.ambiente;
+    luzAmbiente.visible = gruposEncendidos.ambiente && luzAmbiente.intensity > 0;
+    luna.intensity = valoresLuz.luna;
+    luna.visible = gruposEncendidos.luna && luna.intensity > 0;
+    materialesVentanas.forEach(function (material) {
+      material.emissiveIntensity = gruposEncendidos.ventanas ? valoresLuz.ventanas : 0;
+    });
+  }
+
+  function restablecerIluminacion() {
+    controlesLuz.forEach(function (control) {
+      valoresLuz[control.clave] = control.valor;
+      entradasLuz[control.clave].value = control.valor;
+      salidasLuz[control.clave].textContent = control.valor.toFixed(2);
+    });
+    Object.keys(gruposLuz).forEach(function (clave) {
+      gruposEncendidos[clave] = true;
+      interruptoresLuz[clave].checked = true;
+    });
+    aplicarIluminacion();
+  }
+
+  function configurarPanelLuces() {
+    const panel = document.getElementById('panel-luces');
+    const deslizadores = document.getElementById('deslizadores-luz');
+    controlesLuz.forEach(function (control) {
+      const fila = document.createElement('div');
+      const etiqueta = document.createElement('label');
+      const entrada = document.createElement('input');
+      const salida = document.createElement('output');
+      entrada.type = 'range';
+      entrada.id = 'luz-' + control.clave;
+      entrada.min = control.min;
+      entrada.max = control.max;
+      entrada.step = control.paso;
+      etiqueta.htmlFor = entrada.id;
+      etiqueta.textContent = control.nombre;
+      salida.setAttribute('for', entrada.id);
+      fila.append(etiqueta, salida, entrada);
+      deslizadores.appendChild(fila);
+      entradasLuz[control.clave] = entrada;
+      salidasLuz[control.clave] = salida;
+      entrada.addEventListener('input', function () {
+        valoresLuz[control.clave] = Number(entrada.value);
+        salida.textContent = valoresLuz[control.clave].toFixed(2);
+        aplicarIluminacion();
+      });
+    });
+    Object.keys(gruposLuz).forEach(function (clave) {
+      const etiqueta = document.createElement('label');
+      const entrada = document.createElement('input');
+      entrada.type = 'checkbox';
+      entrada.id = 'grupo-' + clave;
+      etiqueta.append(entrada, document.createTextNode(gruposLuz[clave]));
+      document.getElementById('grupos-luz').appendChild(etiqueta);
+      interruptoresLuz[clave] = entrada;
+      entrada.addEventListener('change', function () {
+        gruposEncendidos[clave] = entrada.checked;
+        aplicarIluminacion();
+      });
+    });
+    panel.addEventListener('focusin', function () {
+      ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].forEach(function (codigo) { teclas.delete(codigo); });
+    });
+    document.getElementById('restablecer-luces').addEventListener('click', restablecerIluminacion);
+    restablecerIluminacion();
   }
 
   function reiniciarEntrada() {
@@ -365,6 +483,7 @@
       crearFaros();
       configurarCamara();
       configurarControles();
+      configurarPanelLuces();
       window.addEventListener('resize', alCambiarTamano);
       requestAnimationFrame(animar);
     } catch (error) {

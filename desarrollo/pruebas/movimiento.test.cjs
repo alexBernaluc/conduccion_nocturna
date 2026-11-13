@@ -8,12 +8,22 @@ const base = path.resolve(__dirname, '..');
 
 function iniciar() {
   const eventos = {};
+  const elementos = {};
+  function elemento() {
+    return { style: {}, hijos: [], eventos: {}, appendChild(hijo) { this.hijos.push(hijo); },
+      append(...hijos) { this.hijos.push(...hijos); }, setAttribute() {},
+      addEventListener(nombre, fn) { this.eventos[nombre] = fn; },
+      closest() { return this.enPanel ? elementos['panel-luces'] : null; }
+    };
+  }
   let pendiente, escena, camara, tiempo = 0;
   const registrar = (nombre, fn) => { eventos[nombre] = fn; };
   const contexto = {
     console: { warn() {}, error(...args) { throw Error(args.join(' ')); } },
     window: { innerWidth: 1280, innerHeight: 720, devicePixelRatio: 1, addEventListener: registrar },
-    document: { addEventListener: registrar, getElementById: () => ({ appendChild() {}, style: {} }) },
+    document: { addEventListener: registrar,
+      getElementById: id => elementos[id] || (elementos[id] = elemento()),
+      createElement: elemento, createTextNode: texto => ({ textContent: texto }) },
     requestAnimationFrame: fn => { pendiente = fn; }
   };
   vm.createContext(contexto);
@@ -27,12 +37,17 @@ function iniciar() {
   vm.runInContext(fs.readFileSync(path.join(base, 'src/escena.js'), 'utf8'), contexto);
   pendiente(0);
   return {
-    T, escena, camara, contexto,
+    T, escena, camara, contexto, elementos,
+    control(id) {
+      function buscar(e) { if (e.id === id) return e; for (const h of e.hijos || []) { const r = buscar(h); if (r) return r; } }
+      for (const e of Object.values(elementos)) { const r = buscar(e); if (r) return r; }
+      throw Error('Control ausente: ' + id);
+    },
     auto: escena.getObjectByName('autoRetro'),
     evento(nombre) { eventos[nombre](); },
-    tecla(code, soltar = false) {
+    tecla(code, soltar = false, target) {
       let bloqueado = false;
-      eventos[soltar ? 'keyup' : 'keydown']({ code, preventDefault() { bloqueado = true; } });
+      eventos[soltar ? 'keyup' : 'keydown']({ code, target, preventDefault() { bloqueado = true; } });
       return bloqueado;
     },
     paso(dt) { tiempo += dt * 1000; pendiente(tiempo); },
@@ -105,3 +120,4 @@ const html = fs.readFileSync(path.join(base, 'index.html'), 'utf8');
 for (const [, ruta] of html.matchAll(/<script src="(\.\/[^\"]+)"/g)) assert.ok(fs.existsSync(path.join(base, ruta)));
 assert.equal(fs.readFileSync(path.join(base, 'vendor/three.min.js')).equals(fs.readFileSync(path.join(base, '../versiones/V1_Escenario_Fijo/vendor/three.min.js'))), true);
 console.log('OK: tiempo, teclas, giro, retroceso, límites, foco, cámara, faros, alumbrado y rutas locales. WebGL simulado.');
+module.exports = { iniciar, cerca };

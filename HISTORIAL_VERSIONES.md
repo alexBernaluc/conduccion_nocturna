@@ -22,7 +22,7 @@
 
 ## Versiones pendientes
 
-Las etapas restantes del README original son propuestas: V3 (intensidades), V4 (lomada e inclinación) y V5 (integración y rendimiento). Ninguna de ellas se registra todavía como implementada ni tiene un respaldo terminado.
+Las etapas restantes del README original son propuestas: V4 (lomada e inclinación) y V5 (integración y rendimiento). Ninguna de ellas se registra todavía como implementada ni tiene un respaldo terminado.
 
 Para cada cierre futuro registrar: fecha, carpeta independiente, funcionalidades incorporadas, archivos cambiados, enlace a su explicación técnica, verificaciones efectivamente realizadas y limitaciones conocidas.
 
@@ -47,3 +47,26 @@ Para cada cierre futuro registrar: fecha, carpeta independiente, funcionalidades
 - Respaldo V1 comparado antes y después mediante SHA-256: intacto.
 - La aplicación V2 no depende de V1 ni de `desarrollo`: basta su propio HTML, código y biblioteca. El script de pruebas del autor conserva una comparación contra V1 pensada para ejecutarse desde `desarrollo`; no participa en la ejecución del HTML.
 - No se realizan commits, push ni etiquetas Git automáticamente.
+
+## V3 — Iluminación dinámica y controles interactivos
+
+- **Estado:** cerrada oficialmente el 13/11/2026 tras la confirmación del autor de que fue probada y funciona correctamente.
+- **Respaldo independiente:** [versiones/V3_Iluminacion_Dinamica/index.html](versiones/V3_Iluminacion_Dinamica/index.html), copia completa de `desarrollo/` con código, biblioteca Three.js local, estilos internos del HTML, documentación y pruebas del autor.
+- **Panel:** ocho deslizadores con valores visibles para intensidad independiente de cada faro, alumbrado público, luz hemisférica ambiental, luna direccional, emisión de ventanas, alcance y semiángulo de ambos faros. Los eventos `input` aplican cambios inmediatamente a los objetos existentes.
+- **Grupos y restablecimiento:** interruptores para faros, alumbrado, ambiental, luna y emisión de ventanas; apagar conserva los valores seleccionados. El botón restaura predeterminados y enciende los grupos sin reiniciar auto ni cámara.
+- **Materiales:** ventanas encendidas con `MeshStandardMaterial`, `emissive` y `emissiveIntensity`. Su brillo propio no ilumina otros objetos. Los faroles visibles se oscurecen al apagar sus fuentes.
+- **Sombras:** solo los dos `SpotLight` proyectan sombras; se conserva la resolución 512×512 y se ajusta la profundidad de su cámara de sombra al alcance. No se agregan fuentes de luz ni sombras en postes o luna.
+- **Conducción:** mantiene el movimiento y la cámara de V2. WASD permite conducir mientras se usa el panel; las flechas editan el control cuando tiene foco. Faros y objetivos conservan su relación con el auto.
+- **Archivos de implementación respecto de V2:** `index.html`, `src/escena.js` y adaptación de `pruebas/movimiento.test.cjs`; se agregan `pruebas/iluminacion.test.cjs`, la explicación técnica y la guía V3.
+- **Documentación:** [explicación técnica V3](versiones/V3_Iluminacion_Dinamica/docs/EXPLICACION_TECNICA_V3.md) y [guía práctica V3](versiones/V3_Iluminacion_Dinamica/docs/GUIA_VERSION_3.md); incluye también todos los documentos anteriores.
+- **Limitaciones conservadas:** sin colisiones, lomada, velocidad crucero ni aceleración progresiva; los edificios pueden ocultar auto/cámara. Sin iluminación global ni propagación de luz desde materiales emisivos.
+- **Continuidad:** `desarrollo/` permanece activo. No se modifica el código durante el cierre; el HTML conserva la indicación «en desarrollo» de la implementación probada y el cierre oficial queda registrado aquí.
+
+### Verificación del cierre de V3
+
+- No existía un respaldo V3 previo; se crea una carpeta nueva sin sobrescribir versiones.
+- Sintaxis del JavaScript respaldado y pruebas lógicas V2/V3 aprobadas con Three.js local, DOM y renderizador simulados. La validación personal del funcionamiento fue comunicada por el autor; no se presenta la simulación como una nueva prueba visual WebGL.
+- Los 15 archivos del respaldo se comparan con `desarrollo/` mediante SHA-256 y coinciden. Se verifica que las rutas locales del HTML se resuelvan dentro de la propia copia y que los estilos estén incluidos en el HTML.
+- Respaldos V1/V2 y código activo comparados antes y después: intactos. La aplicación no depende de otras versiones ni de `desarrollo/` para ejecutarse.
+- La comparación de biblioteca contra V1 pertenece solo al script de pruebas del autor, pensado para ejecutarse desde `desarrollo`; no es una dependencia del HTML.
+- No se realizan commits, push ni etiquetas automáticamente.
