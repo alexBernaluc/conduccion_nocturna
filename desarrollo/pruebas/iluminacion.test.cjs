@@ -37,6 +37,6 @@ p.tecla('ArrowUp'); p.elementos['panel-luces'].eventos.focusin(); p.conducir(1,6
 assert.ok(p.auto.position.equals(posicion));
 assert.equal(p.tecla('ArrowUp',false,control),false); p.conducir(1,60); assert.ok(p.auto.position.equals(posicion));
 assert.equal(p.tecla('KeyW',false,control),true); ajustar('izquierdo',50); p.conducir(1,60);
-cerca(p.auto.position.z,posicion.z-12); p.tecla('KeyW',true,control);
-p.conducir(1,60); cerca(p.auto.position.z,posicion.z-12);
+assert.ok(p.auto.position.z < posicion.z); const trasAcelerar = p.auto.position.z; p.tecla('KeyW',true,control);
+p.conducir(1,60); assert.ok(p.auto.position.z < trasAcelerar); cerca(Number(p.elementos['velocidad-actual'].textContent), 0);
 console.log('OK: controles V3, grupos, reset, emisión, sombras limitadas y conducción desde el panel.');

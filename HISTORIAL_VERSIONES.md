@@ -22,7 +22,7 @@
 
 ## Versiones pendientes
 
-Las etapas restantes del README original son propuestas: V4 (lomada e inclinación) y V5 (integración y rendimiento). Ninguna de ellas se registra todavía como implementada ni tiene un respaldo terminado.
+La lomada e inclinación, así como la integración final y ajustes de rendimiento, siguen pendientes. La numeración del plan original se actualizó: V4 corresponde a conducción mejorada, no a la lomada. Las futuras etapas deberán definirse antes de registrarlas como implementadas.
 
 Para cada cierre futuro registrar: fecha, carpeta independiente, funcionalidades incorporadas, archivos cambiados, enlace a su explicación técnica, verificaciones efectivamente realizadas y limitaciones conocidas.
 
@@ -70,3 +70,27 @@ Para cada cierre futuro registrar: fecha, carpeta independiente, funcionalidades
 - Respaldos V1/V2 y código activo comparados antes y después: intactos. La aplicación no depende de otras versiones ni de `desarrollo/` para ejecutarse.
 - La comparación de biblioteca contra V1 pertenece solo al script de pruebas del autor, pensado para ejecutarse desde `desarrollo`; no es una dependencia del HTML.
 - No se realizan commits, push ni etiquetas automáticamente.
+
+## V4 — Conducción mejorada
+
+- **Estado:** cerrada oficialmente el 24/11/2026, tras la confirmación personal del autor de que todas las funcionalidades de conducción mejorada funcionan correctamente.
+- **Respaldo independiente:** [versiones/V4_Conduccion_Mejorada/index.html](versiones/V4_Conduccion_Mejorada/index.html), copia completa de `desarrollo/` con HTML, CSS interno, JavaScript, biblioteca Three.js local, documentación y pruebas del autor.
+- **Velocidad y aceleración:** `velocidadActual` con signo, aceleración progresiva de 0.8 a 4 u/s² durante 3 s, máximos estrictos de 12 u/s adelante y 5 u/s en reversa. Integración por `deltaTime` y desplazamiento con velocidad media.
+- **Desaceleración y frenado:** desaceleración natural de 2 u/s² al soltar, frenado de 8 u/s² con pedal opuesto o ambos pedales. Se llega a cero antes de acelerar en el sentido contrario. W/↑ y S/↓ controlan ambos sentidos.
+- **Crucero:** C fija la velocidad actual desde 3 u/s hacia adelante. La mantiene sin acelerar hasta el máximo y permite girar. Se cancela con otra C, una nueva pulsación de W/S o sus flechas, pérdida de foco/visibilidad o límite exterior. La repetición de teclado no alterna reiteradamente el estado.
+- **Giro y límites:** el signo de velocidad determina el giro, incluso al frenar, circular por inercia o usar crucero. La frontera X ±51/Z ±40 detiene velocidad y cancela crucero; no agrega colisiones con edificios.
+- **Indicadores:** velocidad con signo en unidades del escenario por segundo, máximos avance/reversa y estado/velocidad fijada de crucero. Sin conversión a km/h.
+- **Conservado:** cámara seguidora, jerarquía del auto/faros/objetivos y todos los controles, materiales y sombras de iluminación V3. Solo los dos faros proyectan sombras.
+- **Cambios de implementación respecto de V3:** `src/escena.js`, `index.html` y adaptación de las pruebas de movimiento e iluminación. Nuevos documentos de explicación técnica y guía V4.
+- **Documentación:** [explicación técnica V4](versiones/V4_Conduccion_Mejorada/docs/EXPLICACION_TECNICA_V4.md) y [guía práctica V4](versiones/V4_Conduccion_Mejorada/docs/GUIA_VERSION_4.md). Se incluyen todos los documentos anteriores.
+- **Limitaciones:** sin lomada, colisiones con edificios, suspensión ni física realista. El tiempo por frame se limita a 0.05 s y el movimiento se aproxima numéricamente. Perder foco detiene el auto inmediatamente por seguridad.
+- **Continuidad:** `desarrollo/` sigue activo. No se modifica código funcional durante el cierre. El HTML mantiene su texto «en desarrollo» y el estado oficial se registra en documentación e historial.
+
+### Verificación del cierre de V4
+
+- No existía respaldo V4: se crea una carpeta nueva sin sobrescribir versiones.
+- Sintaxis del JavaScript respaldado y pruebas lógicas de conducción/iluminación aprobadas con Three.js local y DOM/renderizador simulados. La prueba personal fue confirmada por el autor; no se presenta la simulación como una nueva prueba visual WebGL.
+- Los 17 archivos de V4 coinciden con `desarrollo/` mediante SHA-256. Rutas de scripts verificadas dentro de la copia y estilos incluidos en el HTML. La biblioteca local permite abrir directamente el HTML sin servidor ni conexión.
+- Los 34 archivos de los respaldos V1–V3 y los archivos funcionales de desarrollo se comparan antes y después: permanecen intactos.
+- La referencia a V1 usada para comparar la biblioteca pertenece únicamente al script de pruebas del autor, ejecutado desde `desarrollo`; no se utiliza al abrir el HTML.
+- Se actualiza el README general para señalar V4 y la estructura vigente. No se realizan commits, push ni etiquetas automáticamente.

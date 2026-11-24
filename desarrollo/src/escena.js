@@ -1,6 +1,6 @@
 /*
  * Informática 3 — Conducción Nocturna
- * Versión 3 en desarrollo: iluminación interactiva y conducción.
+ * Versión 4 en desarrollo: aceleración progresiva, frenado y crucero.
  *
  * IMPORTANTE: no usamos import/export ni fetch. Este archivo puede abrirse
  * con index.html mediante doble clic (file://) cuando THREE está disponible.
@@ -63,11 +63,21 @@
   const salidasLuz = {};
   const interruptoresLuz = {};
 
-  // Unidades de escena por segundo y radianes por segundo.
-  const CONDUCCION = { velocidad: 12, velocidadGiro: 1.6, limiteX: 51, limiteZ: 40 };
+  // Velocidades en unidades/s, aceleraciones en unidades/s² y tiempos en segundos.
+  const CONDUCCION = {
+    velocidadMaxima: 12, velocidadMaximaRetroceso: 5,
+    aceleracionInicial: 0.8, aceleracionMaxima: 4, tiempoProgresion: 3,
+    frenado: 8, desaceleracionNatural: 2, minimoCrucero: 3,
+    velocidadGiro: 1.6, limiteX: 51, limiteZ: 40
+  };
+  let velocidadActual = 0; // Positiva hacia -Z local; negativa en reversa.
+  let tiempoAcelerando = 0;
+  let marchaAcelerando = 0;
+  let cruceroActivo = false;
+  let velocidadCrucero = 0;
   const CAMARA = { altura: 8.8, distancia: 14, suavidad: 8 };
   const teclas = new Set();
-  const teclasConduccion = new Set(['KeyW', 'KeyS', 'KeyA', 'KeyD',
+  const teclasConduccion = new Set(['KeyW', 'KeyS', 'KeyA', 'KeyD', 'KeyC',
     'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
   let tiempoAnterior = null;
   const direccionFrontal = new THREE.Vector3();
@@ -333,7 +343,13 @@
     if (!teclasConduccion.has(evento.code)) return;
     if (flechaEnPanel(evento)) return;
     evento.preventDefault();
+    if (evento.repeat || teclas.has(evento.code)) return;
     teclas.add(evento.code); // Repeticiones de keydown no duplican una tecla.
+    if (evento.code === 'KeyC') alternarCrucero();
+    else if (['KeyW', 'KeyS', 'ArrowUp', 'ArrowDown'].includes(evento.code)) {
+      desactivarCrucero();
+      actualizarIndicadores();
+    }
   }
 
   function alSoltarTecla(evento) {
@@ -428,7 +444,12 @@
 
   function reiniciarEntrada() {
     teclas.clear();
+    desactivarCrucero();
+    velocidadActual = 0; // Pausa segura al salir: no continuar circulando sin foco.
+    tiempoAcelerando = 0;
+    marchaAcelerando = 0;
     tiempoAnterior = null; // No acumular el tiempo pasado fuera de la ventana.
+    actualizarIndicadores();
   }
 
   function configurarControles() {
@@ -438,19 +459,86 @@
     document.addEventListener('visibilitychange', reiniciarEntrada);
   }
 
+  function desactivarCrucero() {
+    cruceroActivo = false;
+    velocidadCrucero = 0;
+  }
+
+  function alternarCrucero() {
+    if (cruceroActivo) desactivarCrucero();
+    else if (velocidadActual >= CONDUCCION.minimoCrucero &&
+      !teclas.has('KeyS') && !teclas.has('ArrowDown')) {
+      cruceroActivo = true;
+      velocidadCrucero = velocidadActual;
+      tiempoAcelerando = 0;
+      marchaAcelerando = 0;
+    }
+    actualizarIndicadores();
+  }
+
+  function reducirVelocidad(intensidad, deltaTime) {
+    // Nunca cruzar cero por frenado o rozamiento.
+    velocidadActual = Math.sign(velocidadActual) *
+      Math.max(0, Math.abs(velocidadActual) - intensidad * deltaTime);
+  }
+
+  function actualizarVelocidad(deltaTime) {
+    if (cruceroActivo) {
+      velocidadActual = velocidadCrucero;
+      return;
+    }
+    const adelante = teclas.has('KeyW') || teclas.has('ArrowUp');
+    const atras = teclas.has('KeyS') || teclas.has('ArrowDown');
+    const marcha = Number(adelante) - Number(atras);
+    if (marcha === 0 || velocidadActual * marcha < 0) {
+      tiempoAcelerando = 0;
+      marchaAcelerando = 0;
+      const frenar = (adelante && atras) || velocidadActual * marcha < 0;
+      reducirVelocidad(frenar ? CONDUCCION.frenado : CONDUCCION.desaceleracionNatural, deltaTime);
+      return; // Al llegar a cero, la marcha opuesta empieza en el próximo frame.
+    }
+    if (marcha !== marchaAcelerando) tiempoAcelerando = 0;
+    marchaAcelerando = marcha;
+    // Integral de una rampa lineal: promedio de aceleración durante la parte progresiva.
+    const duracion = Math.max(CONDUCCION.tiempoProgresion, 0.001);
+    const tramo = Math.min(deltaTime, Math.max(0, duracion - tiempoAcelerando));
+    const progresoMedio = Math.min(1, (tiempoAcelerando + tramo / 2) / duracion);
+    const aceleracionMedia = CONDUCCION.aceleracionInicial +
+      (CONDUCCION.aceleracionMaxima - CONDUCCION.aceleracionInicial) * progresoMedio;
+    const incremento = aceleracionMedia * tramo + CONDUCCION.aceleracionMaxima * (deltaTime - tramo);
+    tiempoAcelerando = Math.min(duracion, tiempoAcelerando + deltaTime);
+    velocidadActual = THREE.MathUtils.clamp(velocidadActual + marcha * incremento,
+      -CONDUCCION.velocidadMaximaRetroceso, CONDUCCION.velocidadMaxima);
+  }
+
+  function actualizarIndicadores() {
+    document.getElementById('velocidad-actual').textContent = velocidadActual.toFixed(2);
+    document.getElementById('velocidad-maxima').textContent = CONDUCCION.velocidadMaxima + ' / ' + CONDUCCION.velocidadMaximaRetroceso;
+    document.getElementById('estado-crucero').textContent = cruceroActivo ?
+      'Activado · ' + velocidadCrucero.toFixed(2) + ' u/s' : 'Desactivado (C desde ' + CONDUCCION.minimoCrucero + ' u/s)';
+  }
+
   function actualizarMovimiento(deltaTime) {
-    const avance = Number(teclas.has('KeyW') || teclas.has('ArrowUp')) -
-      Number(teclas.has('KeyS') || teclas.has('ArrowDown'));
+    const velocidadAnterior = velocidadActual;
+    actualizarVelocidad(deltaTime);
+    const velocidadMedia = (velocidadAnterior + velocidadActual) / 2;
     const giro = Number(teclas.has('KeyA') || teclas.has('ArrowLeft')) -
       Number(teclas.has('KeyD') || teclas.has('ArrowRight'));
-    // Sin traslación no giramos; en marcha atrás se invierte el giro de la carrocería.
-    auto.rotation.y += giro * avance * CONDUCCION.velocidadGiro * deltaTime;
+    // El signo de la velocidad, no el pedal, determina el giro (también en crucero).
+    auto.rotation.y += giro * Math.sign(velocidadMedia) * CONDUCCION.velocidadGiro * deltaTime;
     const angulo = auto.rotation.y;
     direccionFrontal.set(-Math.sin(angulo), 0, -Math.cos(angulo));
-    auto.position.addScaledVector(direccionFrontal, avance * CONDUCCION.velocidad * deltaTime);
+    auto.position.addScaledVector(direccionFrontal, velocidadMedia * deltaTime);
+    const fuera = Math.abs(auto.position.x) > CONDUCCION.limiteX || Math.abs(auto.position.z) > CONDUCCION.limiteZ;
     // Margen para la carrocería: límite rectangular, no colisiones con objetos.
     auto.position.x = THREE.MathUtils.clamp(auto.position.x, -CONDUCCION.limiteX, CONDUCCION.limiteX);
     auto.position.z = THREE.MathUtils.clamp(auto.position.z, -CONDUCCION.limiteZ, CONDUCCION.limiteZ);
+    if (fuera) {
+      velocidadActual = 0;
+      tiempoAcelerando = 0;
+      marchaAcelerando = 0;
+      desactivarCrucero();
+    }
   }
 
   // 10) RAF entrega milisegundos. Limitamos pausas largas a 0.05 segundos simulados.
@@ -459,6 +547,7 @@
     tiempoAnterior = tiempoActual;
     actualizarMovimiento(deltaTime);
     actualizarCamara(deltaTime, false);
+    actualizarIndicadores();
     renderer.render(escena, camara);
     requestAnimationFrame(animar);
   }
@@ -484,6 +573,7 @@
       configurarCamara();
       configurarControles();
       configurarPanelLuces();
+      actualizarIndicadores();
       window.addEventListener('resize', alCambiarTamano);
       requestAnimationFrame(animar);
     } catch (error) {

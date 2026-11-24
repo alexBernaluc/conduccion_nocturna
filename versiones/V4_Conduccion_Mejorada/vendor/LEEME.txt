@@ -1,0 +1,8 @@
+Para que esta carpeta funcione SIN CONEXION A INTERNET:
+
+1) En la computadora del autor, ejecutar una sola vez PREPARAR_OFFLINE.bat.
+2) Esto descargara three.min.js (Three.js 0.158.0, licencia MIT) en esta carpeta.
+3) Entregar la carpeta completa incluyendo este archivo descargado.
+4) El docente solo debe abrir index.html. No debe instalar ni configurar nada.
+
+Si este archivo no fue preparado, index.html intentara usar Three.js desde Internet.

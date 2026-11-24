@@ -45,9 +45,9 @@ function iniciar() {
     },
     auto: escena.getObjectByName('autoRetro'),
     evento(nombre) { eventos[nombre](); },
-    tecla(code, soltar = false, target) {
+    tecla(code, soltar = false, target, repeat = false) {
       let bloqueado = false;
-      eventos[soltar ? 'keyup' : 'keydown']({ code, target, preventDefault() { bloqueado = true; } });
+      eventos[soltar ? 'keyup' : 'keydown']({ code, target, repeat, preventDefault() { bloqueado = true; } });
       return bloqueado;
     },
     paso(dt) { tiempo += dt * 1000; pendiente(tiempo); },
@@ -55,69 +55,79 @@ function iniciar() {
   };
 }
 const cerca = (a, b, tolerancia = 1e-8) => assert.ok(Math.abs(a - b) < tolerancia, `${a} != ${b}`);
+const velocidad = p => Number(p.elementos['velocidad-actual'].textContent);
+const crucero = p => p.elementos['estado-crucero'].textContent.startsWith('Activado');
+const pulsarC = p => { p.tecla('KeyC'); p.tecla('KeyC', true); };
 for (const fps of [30, 60, 120]) {
   const p = iniciar(); p.tecla('KeyW'); p.conducir(1, fps);
-  cerca(p.auto.position.z, -1); cerca(p.auto.position.x, -13);
-  p.tecla('KeyW', true); p.conducir(1, fps); cerca(p.auto.position.z, -1);
-}
-for (const [tecla, signo] of [['KeyA', 1], ['KeyD', -1]]) {
-  for (const [marcha, avance] of [['KeyW', 1], ['KeyS', -1]]) {
-    const p = iniciar(); p.tecla(marcha); p.tecla(tecla); p.conducir(1, 60);
-    cerca(p.auto.rotation.y, signo * avance * 1.6);
-    cerca(p.auto.position.y, 0.04);
-  }
+  cerca(velocidad(p), 1.33, 0.01); // Integral 0.8*t + (3.2/6)*t².
+  cerca(p.auto.position.z, 11 - (0.4 + 3.2/18), 0.002);
+  p.conducir(2, fps); cerca(velocidad(p), 7.2, 0.01);
+  p.conducir(1, fps); cerca(velocidad(p), 11.2, 0.01);
+  p.conducir(0.5, fps); cerca(velocidad(p), 12);
+  p.tecla('KeyW', true); p.conducir(0.5, fps); cerca(velocidad(p), 11);
 }
 {
-  const p = iniciar(); p.tecla('KeyA'); p.conducir(1, 60); cerca(p.auto.rotation.y, 0);
-  assert.equal(p.tecla('ArrowUp'), true); p.tecla('KeyA', true); p.tecla('KeyW'); p.tecla('KeyW');
-  p.conducir(1, 60); cerca(p.auto.position.z, -1); // Dos alias no duplican velocidad.
-  p.tecla('KeyW', true); p.conducir(1, 60); cerca(p.auto.position.z, -13);
-  p.tecla('ArrowDown'); p.conducir(1, 60); cerca(p.auto.position.z, -13);
-  assert.equal(p.tecla('KeyQ'), false);
-  p.tecla('ArrowLeft'); p.tecla('ArrowRight'); p.conducir(1, 60); cerca(p.auto.rotation.y, 0);
-}
-for (const evento of ['blur', 'visibilitychange']) {
-  const p = iniciar(); p.tecla('KeyW'); p.paso(1 / 60); const z = p.auto.position.z;
-  p.evento(evento); p.paso(10); p.conducir(1, 60); cerca(p.auto.position.z, z);
+  const p = iniciar(); p.tecla('KeyS'); p.conducir(3,60); cerca(velocidad(p),-5);
+  p.tecla('KeyS',true); p.tecla('KeyW'); p.conducir(0.5,60); cerca(velocidad(p),-1,0.01);
+  p.conducir(0.5,60); assert.ok(velocidad(p)>0);
 }
 {
-  const p = iniciar(); p.tecla('KeyW'); p.paso(10); cerca(p.auto.position.z, 10.4);
-  p.conducir(10, 60); cerca(p.auto.position.z, -40);
-  p.tecla('KeyW', true); p.tecla('KeyS'); p.conducir(10, 60); cerca(p.auto.position.z, 40);
-  p.auto.rotation.y = Math.PI / 2; p.conducir(10, 60); cerca(p.auto.position.x, 51);
-  p.tecla('KeyS', true); p.tecla('KeyW'); p.conducir(10, 60); cerca(p.auto.position.x, -51);
+  const p = iniciar(); p.tecla('KeyW'); p.conducir(3,60); p.tecla('KeyW',true); p.tecla('KeyS');
+  p.conducir(0.5,60); cerca(velocidad(p),3.2,0.01);
+  p.conducir(1,60); assert.ok(velocidad(p)<0);
 }
 {
-  const p = iniciar(); const {T, auto, camara} = p;
-  p.tecla('KeyW'); p.tecla('KeyA');
-  for (let i = 0; i < 240; i++) {
-    p.paso(1 / 60);
-    const caja = new T.Box3();
-    // Comprobar las esquinas de la carrocería en el encuadre; no detecta oclusiones.
-    caja.setFromCenterAndSize(new T.Vector3(0, 1, 0), new T.Vector3(2.7, 2, 4.9));
-    for (const x of [caja.min.x, caja.max.x]) for (const y of [caja.min.y, caja.max.y]) for (const z of [caja.min.z, caja.max.z]) {
-      const punto = auto.localToWorld(new T.Vector3(x, y, z)).project(camara);
-      assert.ok(Math.abs(punto.x) < 1 && Math.abs(punto.y) < 1 && Math.abs(punto.z) < 1);
+  const p=iniciar(); pulsarC(p); assert.equal(crucero(p),false);
+  p.tecla('KeyW'); p.conducir(1,60); pulsarC(p); assert.equal(crucero(p),false);
+  p.conducir(1,60); p.tecla('KeyC'); const fija=velocidad(p); assert.equal(crucero(p),true);
+  p.tecla('KeyC'); assert.equal(crucero(p),true); // Una pulsación sostenida.
+  p.tecla('KeyC',false,undefined,true); assert.equal(crucero(p),true);
+  p.tecla('KeyW',true); p.tecla('KeyA'); p.conducir(2,60); cerca(velocidad(p),fija);
+  assert.ok(p.auto.rotation.y>0); p.tecla('KeyC',true); pulsarC(p); assert.equal(crucero(p),false);
+  p.conducir(0.5,60); assert.ok(velocidad(p)<fija);
+}
+for(const pedal of ['KeyW','KeyS','ArrowUp','ArrowDown']) {
+  const p=iniciar(); p.tecla('KeyW'); p.conducir(2,60); p.tecla('KeyW',true); pulsarC(p);
+  assert.equal(crucero(p),true); p.tecla(pedal); assert.equal(crucero(p),false);
+}
+for(const evento of ['blur','visibilitychange']) {
+  const p=iniciar(); p.tecla('KeyW'); p.conducir(2,60); pulsarC(p); const pos=p.auto.position.clone();
+  p.evento(evento); p.paso(10); p.conducir(1,60);
+  cerca(velocidad(p),0); assert.equal(crucero(p),false); assert.ok(pos.equals(p.auto.position));
+}
+for(const [marcha,signo] of [['KeyW',1],['KeyS',-1]]) {
+  const p=iniciar(); p.tecla(marcha); p.tecla('KeyA'); p.conducir(1,60);
+  cerca(p.auto.rotation.y,signo*1.6); cerca(p.auto.position.y,0.04);
+}
+{
+  const p=iniciar(); p.tecla('KeyW'); p.tecla('ArrowUp'); p.conducir(1,60); cerca(velocidad(p),1.33,0.01);
+  p.tecla('KeyS'); p.conducir(1,60); cerca(velocidad(p),0);
+  p.tecla('KeyW',true); p.tecla('ArrowUp',true); p.conducir(1,60); assert.ok(velocidad(p)<0);
+  pulsarC(p); assert.equal(crucero(p),false);
+}
+{
+  const p=iniciar(); p.tecla('KeyW'); p.paso(10); assert.ok(velocidad(p)<0.1);
+  p.conducir(12,60); assert.ok(Math.abs(p.auto.position.z)<=40); assert.equal(crucero(p),false);
+}
+{
+  const p=iniciar(), {T,auto,camara}=p; p.tecla('KeyW'); p.tecla('KeyA');
+  for(let i=0;i<600;i++) {
+    p.paso(1/60); assert.ok(velocidad(p)<=12);
+    for(const x of [-1.35,1.35]) for(const y of [0,2]) for(const z of [-2.45,2.45]) {
+      const punto=auto.localToWorld(new T.Vector3(x,y,z)).project(camara);
+      assert.ok(Math.abs(punto.x)<1 && Math.abs(punto.y)<1 && Math.abs(punto.z)<1);
     }
   }
-  const faros = auto.children.filter(o => o.isSpotLight);
-  assert.equal(faros.length, 2);
-  faros.forEach(luz => {
-    assert.equal(luz.target.parent, auto); assert.equal(luz.castShadow, true);
-    const direccion = luz.target.getWorldPosition(new T.Vector3()).sub(luz.getWorldPosition(new T.Vector3())).normalize();
-    const esperada = new T.Vector3(0, -0.8, -17.62).normalize().applyQuaternion(auto.quaternion);
-    assert.ok(direccion.distanceTo(esperada) < 1e-8);
+  auto.children.filter(o=>o.isSpotLight).forEach(luz=>{
+    assert.equal(luz.target.parent,auto); assert.equal(luz.castShadow,true);
+    const d=luz.target.getWorldPosition(new T.Vector3()).sub(luz.getWorldPosition(new T.Vector3())).normalize();
+    assert.ok(d.distanceTo(new T.Vector3(0,-0.8,-17.62).normalize().applyQuaternion(auto.quaternion))<1e-8);
   });
-  const lamparas = []; p.escena.traverse(o => { if (o.isPointLight) lamparas.push(o); });
-  assert.equal(lamparas.length, 7); lamparas.forEach(l => { cerca(l.intensity, 23); assert.equal(l.castShadow, false); });
-  p.tecla('KeyW', true); p.tecla('KeyA', true); p.conducir(3, 60);
-  const deseada = auto.localToWorld(new T.Vector3(0, 8.8, 14));
-  assert.ok(camara.position.distanceTo(deseada) < 1e-7);
-  p.contexto.window.innerWidth = 600; p.contexto.window.innerHeight = 900; p.evento('resize');
-  cerca(camara.aspect, 600 / 900);
+  p.contexto.window.innerWidth=600; p.contexto.window.innerHeight=900; p.evento('resize'); cerca(camara.aspect,2/3);
 }
 const html = fs.readFileSync(path.join(base, 'index.html'), 'utf8');
 for (const [, ruta] of html.matchAll(/<script src="(\.\/[^\"]+)"/g)) assert.ok(fs.existsSync(path.join(base, ruta)));
 assert.equal(fs.readFileSync(path.join(base, 'vendor/three.min.js')).equals(fs.readFileSync(path.join(base, '../versiones/V1_Escenario_Fijo/vendor/three.min.js'))), true);
-console.log('OK: tiempo, teclas, giro, retroceso, límites, foco, cámara, faros, alumbrado y rutas locales. WebGL simulado.');
+console.log('OK: V4 aceleración, límites, frenado, reversa, crucero, foco, cámara, faros y rutas. WebGL simulado.');
 module.exports = { iniciar, cerca };
