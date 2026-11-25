@@ -94,3 +94,27 @@ Para cada cierre futuro registrar: fecha, carpeta independiente, funcionalidades
 - Los 34 archivos de los respaldos V1–V3 y los archivos funcionales de desarrollo se comparan antes y después: permanecen intactos.
 - La referencia a V1 usada para comparar la biblioteca pertenece únicamente al script de pruebas del autor, ejecutado desde `desarrollo`; no se utiliza al abrir el HTML.
 - Se actualiza el README general para señalar V4 y la estructura vigente. No se realizan commits, push ni etiquetas automáticamente.
+
+## V5 — Ciudad, estructuras y colisiones
+
+- **Estado:** cerrada oficialmente el 25/11/2026 tras la confirmación del autor de que fue implementada y probada.
+- **Respaldo independiente:** [versiones/V5_Ciudad_Colisiones/index.html](versiones/V5_Ciudad_Colisiones/index.html), copia completa de `desarrollo/` con HTML/CSS interno, ambos scripts propios, Three.js local, documentación y pruebas del autor.
+- **Ciudad:** conserva cinco manzanas y siete calzadas de ancho 8. Incluye cinco casas, tres comercios, dos edificios medianos, diez árboles, siete postes, veredas y cinco muros. Construcciones retiradas de las calles y ventanas integradas al control emisivo V3.
+- **Colisiones:** 32 sólidos registrados automáticamente al crearlos. Rectángulo orientado del auto (semiancho 1.34, semilargo 2.47) contra cajas XZ mediante SAT; frontera exterior considerando el volumen completo (53.8/42.8).
+- **Movimiento:** validación previa de giro y desplazamiento en subpasos de recorrido combinado máximo 0.08, deslizamiento limitado por componentes y giro en reposo cuando hay espacio. Un bloqueo detiene velocidad, reinicia aceleración y cancela crucero; se permite retroceder para alejarse.
+- **Visibilidad:** seguimiento de cámara conservado; edificios y árboles interpuestos en el rayo hacia el centro del auto se atenúan temporalmente, sin eliminar su colisión.
+- **Conservado:** aceleración/frenado/crucero V4 e iluminación interactiva V3; once luces, únicamente dos faros con mapas de sombras. No se agregan motores de física ni dependencias.
+- **Reserva V6:** calle X=39, Z de -34 a 34, plana y libre para futura lomada. Todavía no se implementa el desnivel.
+- **Archivos de implementación:** cambios en `index.html`, `src/escena.js`, `pruebas/movimiento.test.cjs`; nuevos `src/colisiones.js`, `pruebas/colisiones.test.cjs`, explicación y guía V5.
+- **Documentación:** [explicación técnica V5](versiones/V5_Ciudad_Colisiones/docs/EXPLICACION_TECNICA_V5.md), ampliada con «Modificaciones prácticas para la defensa», y [guía V5](versiones/V5_Ciudad_Colisiones/docs/GUIA_VERSION_5.md). Los ejercicios indican archivos, funciones, parámetros, consecuencias y errores comunes; no se aplican al código cerrado.
+- **Limitaciones:** colisiones estáticas 2D por aproximaciones, sin física avanzada ni desniveles; transparencia de cámara basada en un rayo al centro, con posibles oclusiones parciales y artefactos visuales.
+- **Continuidad:** `desarrollo/` sigue activo. Código funcional intacto durante el cierre; el HTML conserva su texto «en desarrollo» y el cierre se registra en documentación e historial.
+
+### Verificación del cierre de V5
+
+- No existía un respaldo V5 previo; se crea una carpeta nueva sin sobrescritura.
+- Sintaxis de ambos scripts y suites de colisiones, conducción e iluminación aprobadas con Three.js local y DOM/renderizador simulados. La prueba personal fue confirmada por el autor; no se presenta la simulación como una nueva prueba visual.
+- Copia de 21 archivos comparada con `desarrollo/` mediante SHA-256. Rutas locales y orden de carga Three.js → colisiones → escena verificados; CSS incluido en el HTML.
+- Los 51 archivos de V1–V4 se comparan antes y después y permanecen intactos, al igual que los archivos funcionales de desarrollo.
+- La aplicación se ejecuta abriendo su HTML propio sin otras versiones. La comparación contra V1 pertenece únicamente a los scripts de prueba del autor, ejecutados desde `desarrollo`.
+- README general actualizado a V5; README de la aplicación incorpora orientación actual conservando el texto original V1 como antecedente. No se realizan commits, push ni etiquetas.

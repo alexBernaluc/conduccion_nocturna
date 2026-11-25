@@ -1,4 +1,18 @@
-# Conducción Nocturna — Informática 3 (Versión 1)
+# Conducción Nocturna — V5: ciudad y colisiones
+
+V5 cerrada el 25/11/2026 tras la prueba comunicada por el autor. Esta carpeta contiene una aplicación independiente: abrir su propio `index.html` con doble clic, conservando `src/colisiones.js`, `src/escena.js` y `vendor/three.min.js`. Los estilos CSS están en el HTML. No requiere Internet, servidor ni instalaciones; el texto «en desarrollo» del HTML se conserva sin modificar el código probado.
+
+Consultar la [guía V5](docs/GUIA_VERSION_5.md) y la [explicación técnica V5](docs/EXPLICACION_TECNICA_V5.md), incluida la sección «Modificaciones prácticas para la defensa». Los controles de conducción, crucero e iluminación se mantienen; V5 añade ciudad variada, colisiones y giro en reposo con espacio libre. La lomada todavía no existe: se reserva para V6 la calle X=39, Z de -34 a 34.
+
+En el repositorio se continúa únicamente en `desarrollo/`; las copias bajo `versiones/` quedan cerradas. Los scripts de pruebas son herramientas del autor y no forman parte de la carga del HTML.
+
+---
+
+## README original de V1 — conservado como antecedente
+
+El contenido siguiente describe la primera versión y su plan original, no el estado actual ni la numeración definitiva de las etapas.
+
+### Conducción Nocturna — Informática 3 (Versión 1)
 
 Proyecto final de gráficos 3D con Three.js. La versión 1 muestra **cinco manzanas**, calles, edificios sencillos, postes de alumbrado, un auto retro **quieto**, dos faros `SpotLight`, sombras y cámara en tercera persona.
 

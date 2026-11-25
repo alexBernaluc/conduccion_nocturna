@@ -1,6 +1,6 @@
 /*
  * Informática 3 — Conducción Nocturna
- * Versión 4 en desarrollo: aceleración progresiva, frenado y crucero.
+ * Versión 5 en desarrollo: cinco manzanas variadas y colisiones horizontales.
  *
  * IMPORTANTE: no usamos import/export ni fetch. Este archivo puede abrirse
  * con index.html mediante doble clic (file://) cuando THREE está disponible.
@@ -41,6 +41,14 @@
   let auto;
   const faros = [];
   const lamparas = [];
+  const obstaculos = [];
+  const oclusoresCamara = [];
+  const materialesAtenuados = new Set();
+  const rayoCamara = new THREE.Raycaster();
+  // Incluye ruedas y paragolpes, con un pequeño margen para evitar contactos visuales.
+  const FORMA_AUTO = { semiancho: 1.34, semilargo: 2.47 };
+  const LIMITES_SOLIDOS = { x: 53.8, z: 42.8 }; // Caras interiores de los bordes.
+  const PASO_COLISION = 0.08;
   let luzAmbiente;
   let luna;
   const materialesVentanas = [];
@@ -68,7 +76,7 @@
     velocidadMaxima: 12, velocidadMaximaRetroceso: 5,
     aceleracionInicial: 0.8, aceleracionMaxima: 4, tiempoProgresion: 3,
     frenado: 8, desaceleracionNatural: 2, minimoCrucero: 3,
-    velocidadGiro: 1.6, limiteX: 51, limiteZ: 40
+    velocidadGiro: 1.6
   };
   let velocidadActual = 0; // Positiva hacia -Z local; negativa en reversa.
   let tiempoAcelerando = 0;
@@ -108,6 +116,14 @@
     malla.castShadow = Boolean(proyectaSombra);
     malla.receiveShadow = Boolean(recibeSombra);
     return malla;
+  }
+
+  // Registrar una vez, después de agregar al padre. Solo geometría sólida explícita.
+  function registrarObstaculo(malla, tipo) {
+    malla.updateWorldMatrix(true, true);
+    const limites = new THREE.Box3().setFromObject(malla);
+    malla.userData.tipoObstaculo = tipo;
+    obstaculos.push({ caja: limites, tipo: tipo });
   }
 
   // 2) Escena de noche con una iluminación muy tenue de base.
@@ -162,7 +178,8 @@
   function crearEdificio(posX, posZ, ancho, largo, alto, color, indice) {
     const grupo = new THREE.Group();
     grupo.position.set(posX, 0.2, posZ);
-    grupo.add(caja(ancho, alto, largo, color, 0, alto / 2, 0, true, true));
+    const cuerpo = caja(ancho, alto, largo, color, 0, alto / 2, 0, true, true);
+    grupo.add(cuerpo);
     grupo.add(caja(ancho + 0.35, 0.26, largo + 0.35, 0x1b2430, 0, alto + 0.12, 0, true, true));
 
     const ventanaApagada = new THREE.MeshStandardMaterial({ color: 0x2a4055 });
@@ -183,14 +200,53 @@
     }
     grupo.add(caja(1.18, 2.05, 0.07, 0x222d3b, 0, 1.025, -largo / 2 - 0.055, false, false));
     escena.add(grupo);
+    registrarObstaculo(cuerpo, 'edificio');
+    oclusoresCamara.push(grupo);
+    return grupo;
+  }
+
+  function crearCasa(x, z, pisos, color, indice) {
+    const casa = crearEdificio(x, z, 5.8, 6.4, pisos * 2.7, color, indice);
+    // Techo a cuatro aguas, low-poly, sin texturas ni luces nuevas.
+    const techo = new THREE.Mesh(new THREE.ConeGeometry(4.7, 1.5, 4),
+      new THREE.MeshStandardMaterial({ color: 0x704e43, roughness: 0.9 }));
+    techo.rotation.y = Math.PI / 4;
+    techo.position.y = pisos * 2.7 + 0.85;
+    techo.scale.set(1, 1, 1.1);
+    techo.castShadow = true;
+    techo.receiveShadow = true;
+    casa.add(techo);
+    return casa;
+  }
+
+  function crearComercio(x, z, indice) {
+    const comercio = crearEdificio(x, z, 7.2, 7.6, 3.5, 0x688585, indice);
+    comercio.add(caja(6.8, 0.55, 0.15, 0xb99761, 0, 2.65, -3.9, false, true));
+    return comercio;
+  }
+
+  function crearVereda(x, z) {
+    const vereda = caja(AJUSTES.anchoManzana, 0.36, AJUSTES.anchoManzana,
+      0x66716f, x, 0.02, z, false, true);
+    vereda.name = 'vereda';
+    escena.add(vereda); // Transitable en V5: aún no hay desniveles físicos.
+  }
+
+  function crearMuro(x, z) {
+    const muro = caja(4.8, 0.9, 0.35, 0x8d897f, x, 0.65, z, true, true);
+    escena.add(muro);
+    registrarObstaculo(muro, 'muro');
   }
 
   function crearArbol(posX, posZ) {
     const grupo = new THREE.Group();
     grupo.position.set(posX, 0, posZ);
-    grupo.add(caja(0.45, 1.75, 0.45, 0x493f32, 0, 1.1, 0, true, true));
-    grupo.add(caja(2.1, 2.25, 2.1, 0x284e42, 0, 2.6, 0, true, true));
+    const tronco = caja(0.45, 2.5, 0.45, 0x493f32, 0, 1.45, 0, true, true);
+    grupo.add(tronco);
+    grupo.add(caja(2.1, 2.25, 2.1, 0x284e42, 0, 3.5, 0, true, true));
     escena.add(grupo);
+    registrarObstaculo(tronco, 'arbol');
+    oclusoresCamara.push(grupo);
   }
 
   // 5) Cinco manzanas: dos abajo y tres arriba. Es un mapa pequeño, no abierto.
@@ -203,14 +259,13 @@
     posiciones.forEach(function (pos, i) {
       const x = pos[0];
       const z = pos[1];
-      escena.add(caja(AJUSTES.anchoManzana, 0.36, AJUSTES.anchoManzana,
-        0x66716f, x, 0.02, z, false, true));
-      // Dos edificios por manzana, para mostrar volúmenes y sombras.
-      crearEdificio(x - 4.25, z - 1.2, 7.2, 9.0, 6.5 + (i % 3) * 2.0, colores[i], i);
-      crearEdificio(x + 4.35, z + 1.2, 6.8, 8.5, 5.6 + ((i + 1) % 3) * 2.4,
-        colores[(i + 2) % colores.length], i + 2);
+      crearVereda(x, z);
+      crearCasa(x - 4.4, z - 1, 1 + i % 2, colores[i], i);
+      if (i % 2 === 0) crearComercio(x + 4.3, z + 0.8, i + 2);
+      else crearEdificio(x + 4.3, z + 0.8, 6.4, 7.8, 7.5 + i, colores[i], i + 2);
       crearArbol(x - 6.4, z + 6.7);
       crearArbol(x + 6.6, z - 6.6);
+      crearMuro(x, z + 7.7);
     });
   }
 
@@ -218,7 +273,8 @@
   function crearPoste(x, z) {
     const poste = new THREE.Group();
     poste.position.set(x, 0, z);
-    poste.add(caja(0.22, 6.1, 0.22, 0x687681, 0, 3.05, 0, true, true));
+    const soporte = caja(0.22, 6.1, 0.22, 0x687681, 0, 3.05, 0, true, true);
+    poste.add(soporte);
     poste.add(caja(1.2, 0.16, 0.24, 0x768590, 0.52, 6.08, 0, true, true));
     const foco = new THREE.Mesh(
       new THREE.SphereGeometry(0.25, 12, 8),
@@ -233,13 +289,14 @@
     poste.add(luz);
     lamparas.push(luz);
     escena.add(poste);
+    registrarObstaculo(soporte, 'poste');
   }
 
   function crearAlumbrado() {
     [
-      [-17.6, -3.9], [9.5, -3.9], [35.4, -3.9],
-      [-17.6, 22.1], [9.5, 22.1],
-      [-35.4, -22.1], [35.4, 22.1]
+      [-17.6, -4.5], [8.5, -4.5], [34.5, -4.5],
+      [-17.6, 21.5], [8.5, 21.5],
+      [-34.5, -21.5], [34.5, 21.5]
     ].forEach(function (p) { crearPoste(p[0], p[1]); });
   }
 
@@ -331,6 +388,31 @@
     if (inmediata) camara.position.copy(posicionCamaraDeseada);
     else camara.position.lerp(posicionCamaraDeseada, factor);
     camara.lookAt(objetivoCamara);
+    despejarVistaCamara();
+  }
+
+  // Mantener la cámara V4: atenuar temporalmente grupos que tapen el centro del auto.
+  function despejarVistaCamara() {
+    materialesAtenuados.forEach(function (material) {
+      material.opacity = 1;
+      material.transparent = false;
+      material.depthWrite = true;
+    });
+    materialesAtenuados.clear();
+    const direccion = objetivoCamara.clone().sub(camara.position);
+    rayoCamara.set(camara.position, direccion.clone().normalize());
+    rayoCamara.far = direccion.length();
+    oclusoresCamara.forEach(function (grupo) {
+      grupo.updateWorldMatrix(true, true);
+      if (rayoCamara.intersectObject(grupo, true).length === 0) return;
+      grupo.traverse(function (objeto) {
+        if (!objeto.isMesh) return;
+        objeto.material.opacity = 0.18;
+        objeto.material.transparent = true;
+        objeto.material.depthWrite = false;
+        materialesAtenuados.add(objeto.material);
+      });
+    });
   }
 
   // Las flechas editan el panel; WASD permite conducir incluso con foco en él.
@@ -518,27 +600,56 @@
       'Activado · ' + velocidadCrucero.toFixed(2) + ' u/s' : 'Desactivado (C desde ' + CONDUCCION.minimoCrucero + ' u/s)';
   }
 
+  function posicionAutoLibre(x, z, angulo) {
+    return ColisionesCiudad.posicionLibre(x, z, angulo, FORMA_AUTO, obstaculos, LIMITES_SOLIDOS);
+  }
+
+  function detenerPorColision() {
+    velocidadActual = 0;
+    tiempoAcelerando = 0;
+    marchaAcelerando = 0;
+    desactivarCrucero();
+  }
+
+  function aplicarMovimientoSeguro(distancia, giroTotal) {
+    const pasos = ColisionesCiudad.cantidadPasos(distancia, giroTotal, FORMA_AUTO, PASO_COLISION);
+    const pasoDistancia = distancia / pasos;
+    const pasoGiro = giroTotal / pasos;
+    for (let i = 0; i < pasos; i++) {
+      let bloqueado = false;
+      const anguloPropuesto = auto.rotation.y + pasoGiro;
+      if (posicionAutoLibre(auto.position.x, auto.position.z, anguloPropuesto)) auto.rotation.y = anguloPropuesto;
+      else bloqueado = true;
+      direccionFrontal.set(-Math.sin(auto.rotation.y), 0, -Math.cos(auto.rotation.y));
+      const dx = direccionFrontal.x * pasoDistancia;
+      const dz = direccionFrontal.z * pasoDistancia;
+      const x = auto.position.x, z = auto.position.z;
+      if (posicionAutoLibre(x + dx, z + dz, auto.rotation.y)) {
+        auto.position.x += dx;
+        auto.position.z += dz;
+      } else {
+        // Probar cada componente conserva un pequeño deslizamiento tangencial.
+        if (posicionAutoLibre(x + dx, z, auto.rotation.y)) auto.position.x += dx;
+        if (posicionAutoLibre(auto.position.x, z + dz, auto.rotation.y)) auto.position.z += dz;
+        bloqueado = true;
+      }
+      if (bloqueado) {
+        detenerPorColision();
+        break; // No consumir más distancia con la velocidad anterior al impacto.
+      }
+    }
+  }
+
   function actualizarMovimiento(deltaTime) {
     const velocidadAnterior = velocidadActual;
     actualizarVelocidad(deltaTime);
     const velocidadMedia = (velocidadAnterior + velocidadActual) / 2;
     const giro = Number(teclas.has('KeyA') || teclas.has('ArrowLeft')) -
       Number(teclas.has('KeyD') || teclas.has('ArrowRight'));
-    // El signo de la velocidad, no el pedal, determina el giro (también en crucero).
-    auto.rotation.y += giro * Math.sign(velocidadMedia) * CONDUCCION.velocidadGiro * deltaTime;
-    const angulo = auto.rotation.y;
-    direccionFrontal.set(-Math.sin(angulo), 0, -Math.cos(angulo));
-    auto.position.addScaledVector(direccionFrontal, velocidadMedia * deltaTime);
-    const fuera = Math.abs(auto.position.x) > CONDUCCION.limiteX || Math.abs(auto.position.z) > CONDUCCION.limiteZ;
-    // Margen para la carrocería: límite rectangular, no colisiones con objetos.
-    auto.position.x = THREE.MathUtils.clamp(auto.position.x, -CONDUCCION.limiteX, CONDUCCION.limiteX);
-    auto.position.z = THREE.MathUtils.clamp(auto.position.z, -CONDUCCION.limiteZ, CONDUCCION.limiteZ);
-    if (fuera) {
-      velocidadActual = 0;
-      tiempoAcelerando = 0;
-      marchaAcelerando = 0;
-      desactivarCrucero();
-    }
+    // V5 permite maniobrar en reposo; en reversa conserva el giro invertido.
+    const sentido = Math.sign(velocidadMedia) || 1;
+    aplicarMovimientoSeguro(velocidadMedia * deltaTime,
+      giro * sentido * CONDUCCION.velocidadGiro * deltaTime);
   }
 
   // 10) RAF entrega milisegundos. Limitamos pausas largas a 0.05 segundos simulados.
@@ -569,6 +680,9 @@
       crearManzanas();
       crearAlumbrado();
       crearVehiculo();
+      if (!posicionAutoLibre(auto.position.x, auto.position.z, auto.rotation.y)) {
+        throw new Error('La posición inicial del auto no está libre.');
+      }
       crearFaros();
       configurarCamara();
       configurarControles();

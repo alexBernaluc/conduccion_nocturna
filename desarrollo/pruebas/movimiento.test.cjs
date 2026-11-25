@@ -28,16 +28,21 @@ function iniciar() {
   };
   vm.createContext(contexto);
   vm.runInContext(fs.readFileSync(path.join(base, 'vendor/three.min.js'), 'utf8'), contexto);
+  vm.runInContext(fs.readFileSync(path.join(base, 'src/colisiones.js'), 'utf8'), contexto);
   const T = contexto.THREE;
   T.WebGLRenderer = class {
     constructor() { this.shadowMap = {}; this.domElement = {}; }
     setPixelRatio() {} setSize() {}
     render(s, c) { escena = s; camara = c; s.updateMatrixWorld(true); c.updateMatrixWorld(true); }
   };
-  vm.runInContext(fs.readFileSync(path.join(base, 'src/escena.js'), 'utf8'), contexto);
+  // Instrumentación solo en memoria de pruebas; no publica una API en el navegador.
+  const fuente = fs.readFileSync(path.join(base, 'src/escena.js'), 'utf8').replace('  iniciar();',
+    '  iniciar(); globalThis.pruebaCiudad = { obstaculos, FORMA_AUTO, LIMITES_SOLIDOS, aplicarMovimientoSeguro, posicionAutoLibre, registrarObstaculo };');
+  vm.runInContext(fuente, contexto);
   pendiente(0);
   return {
-    T, escena, camara, contexto, elementos,
+    T, escena, camara, contexto, elementos, ciudad: contexto.pruebaCiudad,
+    geometria: vm.runInContext('ColisionesCiudad', contexto),
     control(id) {
       function buscar(e) { if (e.id === id) return e; for (const h of e.hijos || []) { const r = buscar(h); if (r) return r; } }
       for (const e of Object.values(elementos)) { const r = buscar(e); if (r) return r; }
@@ -78,7 +83,7 @@ for (const fps of [30, 60, 120]) {
   p.conducir(1,60); assert.ok(velocidad(p)<0);
 }
 {
-  const p=iniciar(); pulsarC(p); assert.equal(crucero(p),false);
+  const p=iniciar(); p.auto.position.set(26,0.04,13); pulsarC(p); assert.equal(crucero(p),false);
   p.tecla('KeyW'); p.conducir(1,60); pulsarC(p); assert.equal(crucero(p),false);
   p.conducir(1,60); p.tecla('KeyC'); const fija=velocidad(p); assert.equal(crucero(p),true);
   p.tecla('KeyC'); assert.equal(crucero(p),true); // Una pulsación sostenida.
@@ -108,10 +113,12 @@ for(const [marcha,signo] of [['KeyW',1],['KeyS',-1]]) {
 }
 {
   const p=iniciar(); p.tecla('KeyW'); p.paso(10); assert.ok(velocidad(p)<0.1);
-  p.conducir(12,60); assert.ok(Math.abs(p.auto.position.z)<=40); assert.equal(crucero(p),false);
+  p.conducir(12,60); assert.ok(Math.abs(p.auto.position.z)<=42.8-2.47); assert.equal(crucero(p),false);
 }
 {
-  const p=iniciar(), {T,auto,camara}=p; p.tecla('KeyW'); p.tecla('KeyA');
+  const p=iniciar(), {T,auto,camara}=p; auto.position.set(26,0.04,13);
+  // Dar tiempo a la cámara a seguir el cambio de ubicación de esta prueba.
+  p.conducir(3,60); p.tecla('KeyW'); p.tecla('KeyA');
   for(let i=0;i<600;i++) {
     p.paso(1/60); assert.ok(velocidad(p)<=12);
     for(const x of [-1.35,1.35]) for(const y of [0,2]) for(const z of [-2.45,2.45]) {

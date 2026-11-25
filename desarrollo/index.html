@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Conducción Nocturna — Versión 4 en desarrollo</title>
+  <title>Conducción Nocturna — Versión 5 en desarrollo</title>
   <style>
     :root { color-scheme: dark; font-family: system-ui, Arial, sans-serif; }
     * { box-sizing: border-box; }
@@ -43,7 +43,7 @@
   <section id="titulo">
     <h1>Conducción Nocturna</h1>
     <p>Informática 3 · Three.js</p>
-    <p><strong>Versión 4 en desarrollo:</strong> conducción mejorada.</p>
+    <p><strong>Versión 5 en desarrollo:</strong> ciudad y colisiones.</p>
     <div id="indicadores">
       Velocidad: <span id="velocidad-actual">0.00</span> u/s (negativa = reversa)<br>
       Máxima avance / reversa: <span id="velocidad-maxima"></span> u/s<br>
@@ -54,7 +54,8 @@
     W / ↑: acelerar · S / ↓: frenar y luego retroceder.<br>
     A / ←: dirección izquierda · D / →: dirección derecha.<br>
     C: activar/desactivar crucero. W o S lo cancelan.<br>
-    Soltar desacelera gradualmente. Sin colisiones con edificios.
+    A/D también gira en reposo si hay espacio. Choques cancelan crucero.<br>
+    Calle X = 39 libre para la futura lomada (todavía no implementada).
   </aside>
   <section id="error"><div id="mensaje-error"></div></section>
   <details id="panel-luces" open>
@@ -75,6 +76,7 @@
     }
   </script>
   <!-- Código propio, legible, sin módulos ni fetch: compatible con file:// -->
+  <script src="./src/colisiones.js"></script>
   <script src="./src/escena.js"></script>
 </body>
 </html>
